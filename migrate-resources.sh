@@ -17,10 +17,11 @@
 
 namespace=shoot--mig--migration2
 
-# Delete BackupEntrys
-backupentry=$(kubectl get backupentry -o jsonpath='{.items[*].metadata.name}' | grep ${namespace})
+# Delete BackupEntries
+backupentry=$(kubectl get backupentry -o jsonpath='{range .items[*]}{@.metadata.name}{"\n"}{end}}' | grep ${namespace})
 echo "Deleting backupentry: $backupentry"
 kubectl annotate backupentry "${backupentry}" 'confirmation.gardener.cloud/deletion=true' --overwrite=true
+kubectl annotate backupentry "${backupentry}" 'gardener.cloud/operation=migrate' --overwrite=true
 kubectl delete backupentry "${backupentry}"
 
 # Annotate extension resources for migration
@@ -31,6 +32,7 @@ done
 
 
 # Wait until extension resources migrated
+# Comment this if there is no cluster resource.
 for resource_kind in "${extension_resource_kinds[@]}"; do
     count=0
     while true; do
@@ -51,14 +53,35 @@ done
 
 # Delete all Extension resources
 for resource_kind in "${extension_resource_kinds[@]}"; do
+    # Uncomment this if there is no cluster resource and finalizers on extension resources need to be removed manually.
     # read -r -d '' -a resources < <(kubectl -n "${namespace}" get "${resource_kind}" -o jsonpath='{.items[*].metadata.name}')
-        # for resource in "${resources[@]}"; do
+    #     for resource in "${resources[@]}"; do
     #     kubectl -n "${namespace}" patch "${resource_kind}" "${resource}" --type=merge --patch='{"metadata":{"finalizers": [null]}}'
-    # doneku
+    # done
     echo "Deleting extension resource_kind $resource_kind"
     kubectl -n "${namespace}" annotate "${resource_kind}" --all 'confirmation.gardener.cloud/deletion=true'
     kubectl -n "${namespace}" delete "${resource_kind}" --all
 done
+
+# Delete all secrets if cluster resource not found
+# Uncomment this if there is no cluster resource and there are secrets with finalizers.
+# read -r -d '' -a secrets < <( kubectl -n "${namespace}" get secrets -o jsonpath='{.items[*].metadata.name}' && printf '\0' )
+# for secret in "${secrets[@]}"; do
+#     echo "Deleting secret: $secret"
+#     kubectl -n "${namespace}" delete secret "${secret}" --wait=false
+#     echo "Removing finalizer on secret: $secret"
+#     kubectl -n "${namespace}" patch secret "${secret}" --type=merge --patch='{"metadata":{"finalizers": [null]}}'
+# done
+
+# Delete all configmaps if cluster resource not found
+# Uncomment this if there is no cluster resource and there are secrets with finalizers.
+# read -r -d '' -a configmaps < <( kubectl -n "${namespace}" get configmaps -o jsonpath='{.items[*].metadata.name}' && printf '\0' )
+# for configmap in "${configmaps[@]}"; do
+#     echo "Deleting configmap: $configmap"
+#     kubectl -n "${namespace}" delete configmap "${configmap}" --wait=false
+#     echo "Removing finalizer on configmap: $configmap"
+#     kubectl -n "${namespace}" patch configmap "${configmap}" --type=merge --patch='{"metadata":{"finalizers": [null]}}'
+# done
 
 # Delete all ManagedResources
 read -r -d '' -a managed_resources < <( kubectl -n "${namespace}" get managedresource -o jsonpath='{.items[*].metadata.name}' && printf '\0' )
@@ -79,8 +102,9 @@ kubectl -n "${namespace}" delete dnsowners --all
 echo "Deleting dns entries"
 kubectl -n "${namespace}" delete dnsentries --all
 
-echo "Deleting dns owners"
+echo "Deleting dns providers"
 kubectl -n "${namespace}" delete dnsproviders --all
+
 
 
 # Delete Namespace
