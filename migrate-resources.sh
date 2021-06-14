@@ -15,7 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-namespace=shoot--mig--migration2
+namespace=shoot--i077286--emhfhegqmq
 
 # Delete BackupEntries
 backupentry=$(kubectl get backupentry -o jsonpath='{range .items[*]}{@.metadata.name}{"\n"}{end}}' | grep ${namespace})
@@ -95,9 +95,10 @@ for resource in "${managed_resources[@]}"; do
 done
 
 
-# Migrate DNS
-echo "Deleting dns owners"
-kubectl -n "${namespace}" delete dnsowners --all
+# Delete DNS
+dns_owner=$(kubectl get dnsowner -o jsonpath='{range .items[*]}{@.metadata.name}{"\n"}{end}}' | grep ${namespace})
+echo "Deleting DNS Owner: $dns_owner"
+kubectl -n "${namespace}" delete dnsowners "$dns_owner"
 
 echo "Deleting dns entries"
 kubectl -n "${namespace}" delete dnsentries --all
